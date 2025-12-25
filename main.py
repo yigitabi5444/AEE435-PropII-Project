@@ -20,8 +20,8 @@ class NiDaqGui(tk.Tk):
 
         # --- UI Vars ---
         # These should match what NI MAX shows. Example: "cDAQ9185-1A2B3C4DMod1"
-        self.tc_module = tk.StringVar(value="cDAQ9185-XXXXMod1")  # NI-9212
-        self.ai_module = tk.StringVar(value="cDAQ9185-XXXXMod2")  # NI-9201
+        self.tc_module = tk.StringVar(value="cDAQ9185-20050D7Mod4")  # NI-9212
+        self.ai_module = tk.StringVar(value="cDAQ9185-20050D7Mod3")  # NI-9201
 
         self.tc_type = tk.StringVar(value="K")      # change if needed
         self.sample_period_ms = tk.IntVar(value=200)  # 5 Hz UI update
