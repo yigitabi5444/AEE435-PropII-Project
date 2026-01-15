@@ -1,4 +1,3 @@
-import csv
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -23,8 +22,6 @@ class NiDaqGui(tk.Tk):
         self.ai_task = None
         self.running = False
         self.after_id = None
-        self.log_file = None
-        self.log_writer = None
 
         # --- UI Vars ---
         # These should match what NI MAX shows. Example: "cDAQ9185-1A2B3C4DMod1"
@@ -33,7 +30,12 @@ class NiDaqGui(tk.Tk):
 
         self.tc_type = tk.StringVar(value="K")      # change if needed
         self.sample_period_ms = tk.IntVar(value=200)  # 5 Hz UI update
-        self.logging_enabled = tk.BooleanVar(value=False)
+
+        # Manual inputs
+        self.shaft_speed_rpm = tk.StringVar()
+        self.inlet_total_temp = tk.StringVar()
+        self.inlet_total_pressure = tk.StringVar()
+        self.throat_area = tk.StringVar()
 
         # Readouts
         self.tc_vals = [tk.StringVar(value="—") for _ in range(3)]
@@ -86,35 +88,57 @@ class NiDaqGui(tk.Tk):
         self.btn_calibrate = ttk.Button(btns, text="Calibration...", command=self.open_calibration_dialog)
         self.btn_calibrate.pack(side="left", padx=5)
 
-        self.chk_log = ttk.Checkbutton(
-            btns,
-            text="Log to CSV",
-            variable=self.logging_enabled,
-            command=self._on_logging_toggle,
-        )
-        self.chk_log.pack(side="left", padx=8)
+        self.btn_log = ttk.Button(btns, text="Log Operating Point", command=self.log_operating_point, state="disabled")
+        self.btn_log.pack(side="left", padx=8)
 
         self.btn_disconnect = ttk.Button(btns, text="Disconnect", command=self.disconnect, state="disabled")
         self.btn_disconnect.pack(side="left", padx=5)
 
         ttk.Label(btns, textvariable=self.status).pack(side="right", padx=5)
 
+        # Manual input section
+        manual = ttk.LabelFrame(frm, text="Manual Inputs")
+        manual.pack(fill="x", **pad)
+
+        ttk.Label(manual, text="Shaft Speed (RPM):").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Entry(manual, textvariable=self.shaft_speed_rpm, width=12).grid(row=0, column=1, sticky="w", **pad)
+
+        ttk.Label(manual, text="Inlet Total Temp (C):").grid(row=0, column=2, sticky="w", **pad)
+        ttk.Entry(manual, textvariable=self.inlet_total_temp, width=12).grid(row=0, column=3, sticky="w", **pad)
+
+        ttk.Label(manual, text="Inlet Total Pressure:").grid(row=1, column=0, sticky="w", **pad)
+        ttk.Entry(manual, textvariable=self.inlet_total_pressure, width=12).grid(row=1, column=1, sticky="w", **pad)
+
+        ttk.Label(manual, text="Throat Area:").grid(row=1, column=2, sticky="w", **pad)
+        ttk.Entry(manual, textvariable=self.throat_area, width=12).grid(row=1, column=3, sticky="w", **pad)
+
         # Readouts
         ro = ttk.Frame(frm)
         ro.pack(fill="both", expand=True, **pad)
 
-        tc_box = ttk.LabelFrame(ro, text="Thermocouples (NI-9212) ai0..ai2 (°C)")
+        tc_box = ttk.LabelFrame(ro, text="Temperatures (NI-9212) ai0..ai2")
         tc_box.pack(side="left", fill="both", expand=True, padx=8, pady=8)
 
-        for i in range(3):
-            ttk.Label(tc_box, text=f"TC{i} (ai{i}):").grid(row=i, column=0, sticky="w", padx=10, pady=10)
+        temp_labels = (
+            "Compressor Exit Total Temp",
+            "Turbine Inlet Total Temp",
+            "Turbine Exit Total Temp",
+        )
+        for i, label in enumerate(temp_labels):
+            ttk.Label(tc_box, text=f"{label}:").grid(row=i, column=0, sticky="w", padx=10, pady=10)
             ttk.Label(tc_box, textvariable=self.tc_vals[i], font=("TkDefaultFont", 12, "bold")).grid(row=i, column=1, sticky="w", padx=10, pady=10)
 
-        ai_box = ttk.LabelFrame(ro, text="Pressure / Analog Inputs (NI-9201) ai0..ai3 (V)")
+        ai_box = ttk.LabelFrame(ro, text="Pressures (NI-9201) ai0..ai3")
         ai_box.pack(side="right", fill="both", expand=True, padx=8, pady=8)
 
-        for i in range(4):
-            ttk.Label(ai_box, text=f"AI{i} (ai{i}):").grid(row=i, column=0, sticky="w", padx=10, pady=10)
+        pressure_labels = (
+            "Compressor Exit Total Pressure",
+            "Turbine Inlet Total Pressure",
+            "Turbine Exit Total Pressure",
+            "AI3 (Spare)",
+        )
+        for i, label in enumerate(pressure_labels):
+            ttk.Label(ai_box, text=f"{label}:").grid(row=i, column=0, sticky="w", padx=10, pady=10)
             ttk.Label(ai_box, textvariable=self.ai_vals[i], font=("TkDefaultFont", 12, "bold")).grid(row=i, column=1, sticky="w", padx=10, pady=10)
 
         # Close handler
@@ -262,47 +286,6 @@ class NiDaqGui(tk.Tk):
             return eng1
         return eng1 + (value - raw1) * (eng2 - eng1) / (raw2 - raw1)
 
-    def _open_log(self):
-        if self.log_file:
-            return
-        try:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"log_{timestamp}.csv"
-            path = os.path.join(self.script_dir, filename)
-            self.log_file = open(path, "w", newline="", encoding="utf-8")
-            self.log_writer = csv.writer(self.log_file)
-            header = ["timestamp"]
-            for i in range(3):
-                header.append(f"tc{i}_raw")
-            for i in range(3):
-                header.append(f"tc{i}_cal")
-            for i in range(4):
-                header.append(f"ai{i}_raw")
-            for i in range(4):
-                header.append(f"ai{i}_cal")
-            self.log_writer.writerow(header)
-            self.log_file.flush()
-        except Exception as exc:
-            self._close_log()
-            self.logging_enabled.set(False)
-            messagebox.showerror("Log failed", f"{type(exc).__name__}: {exc}")
-
-    def _close_log(self):
-        if self.log_file:
-            try:
-                self.log_file.close()
-            except Exception:
-                pass
-        self.log_file = None
-        self.log_writer = None
-
-    def _on_logging_toggle(self):
-        if self.running:
-            if self.logging_enabled.get():
-                self._open_log()
-            else:
-                self._close_log()
-
     def _get_period_ms(self):
         try:
             value = int(self.sample_period_ms.get())
@@ -409,9 +392,8 @@ class NiDaqGui(tk.Tk):
         self.running = True
         self.btn_start.config(state="disabled")
         self.btn_stop.config(state="normal")
+        self.btn_log.config(state="normal")
         self.status.set("Running")
-        if self.logging_enabled.get():
-            self._open_log()
 
         # Kick off periodic read (UI thread)
         self._tick()
@@ -432,9 +414,9 @@ class NiDaqGui(tk.Tk):
             except Exception:
                 pass
             self.after_id = None
-        self._close_log()
         self.btn_stop.config(state="disabled")
         self.btn_start.config(state="normal")
+        self.btn_log.config(state="disabled")
         self.status.set("Connected (stopped)")
 
     def disconnect(self):
@@ -444,6 +426,7 @@ class NiDaqGui(tk.Tk):
         self.btn_disconnect.config(state="disabled")
         self.btn_start.config(state="disabled")
         self.btn_stop.config(state="disabled")
+        self.btn_log.config(state="disabled")
         self.status.set("Disconnected")
         for v in self.tc_vals + self.ai_vals:
             v.set("—")
@@ -484,21 +467,12 @@ class NiDaqGui(tk.Tk):
                 for i in range(4):
                     self.ai_vals[i].set(self._format_value(ai_cal[i], ".4f"))
 
-            if self.log_writer and updated:
-                row = [time.strftime("%Y-%m-%d %H:%M:%S")]
-                row.extend(self.last_tc_raw)
-                row.extend(tc_cal)
-                row.extend(self.last_ai_raw)
-                row.extend(ai_cal)
-                self.log_writer.writerow(row)
-                self.log_file.flush()
-
         except Exception as e:
             # Stop acquisition but keep connection so user can retry
             self.running = False
-            self._close_log()
             self.btn_stop.config(state="disabled")
             self.btn_start.config(state="normal")
+            self.btn_log.config(state="disabled")
             self.status.set("Error (stopped)")
             messagebox.showerror("Read failed", f"{type(e).__name__}: {e}")
             return
@@ -506,6 +480,91 @@ class NiDaqGui(tk.Tk):
         # Schedule next tick
         period = self._get_period_ms()
         self.after_id = self.after(period, self._tick)
+
+    def _parse_required_float(self, label, value):
+        text = value.strip()
+        if not text:
+            raise ValueError(f"{label} is required.")
+        try:
+            return float(text)
+        except Exception as exc:
+            raise ValueError(f"{label} must be a number.") from exc
+
+    def _format_name_value(self, value):
+        if isinstance(value, float):
+            return f"{value:g}"
+        return str(value)
+
+    def _has_valid_sensor_data(self, values):
+        for value in values:
+            if value is None:
+                return False
+            if isinstance(value, float) and math.isnan(value):
+                return False
+        return True
+
+    def _refresh_latest_readings(self):
+        tc = self._read_latest(self.tc_task, 3)
+        ai = self._read_latest(self.ai_task, 4)
+        if tc is not None:
+            self.last_tc_raw = tc
+        if ai is not None:
+            self.last_ai_raw = ai
+
+    def log_operating_point(self):
+        if not self.tc_task or not self.ai_task:
+            messagebox.showerror("Error", "Not connected.")
+            return
+        if not self.running:
+            messagebox.showerror("Error", "Start acquisition before logging.")
+            return
+
+        self._refresh_latest_readings()
+        if not self._has_valid_sensor_data(self.last_tc_raw) or not self._has_valid_sensor_data(self.last_ai_raw):
+            messagebox.showerror("Error", "No sensor data available yet.")
+            return
+
+        try:
+            shaft_speed = self._parse_required_float("Shaft Speed (RPM)", self.shaft_speed_rpm.get())
+            inlet_temp = self._parse_required_float("Inlet Total Temp", self.inlet_total_temp.get())
+            inlet_pressure = self._parse_required_float("Inlet Total Pressure", self.inlet_total_pressure.get())
+            throat_area = self._parse_required_float("Throat Area", self.throat_area.get())
+        except ValueError as exc:
+            messagebox.showerror("Invalid input", str(exc))
+            return
+
+        operating_point_name = (
+            f"T{self._format_name_value(inlet_temp)}"
+            f"_P{self._format_name_value(inlet_pressure)}"
+            f"_RPM{self._format_name_value(shaft_speed)}"
+        )
+        filename = f"operating_point_{operating_point_name}.txt"
+        path = os.path.join(self.script_dir, filename)
+
+        tc0, tc1, tc2 = self.last_tc_raw
+        ai0, ai1, ai2, ai3 = self.last_ai_raw
+        data = [
+            ("timestamp", time.strftime("%Y-%m-%d %H:%M:%S")),
+            ("operating_point_name", operating_point_name),
+            ("shaft_speed_rpm", shaft_speed),
+            ("t02_raw", inlet_temp),
+            ("p02_raw", inlet_pressure),
+            ("throat_area", throat_area),
+            ("t03_raw", tc0),
+            ("p03_raw", ai0),
+            ("t04_raw", tc1),
+            ("p04_raw", ai1),
+            ("t05_raw", tc2),
+            ("p05_raw", ai2),
+            ("ai3_raw", ai3),
+        ]
+
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                for key, value in data:
+                    handle.write(f"{key}: {value}\n")
+        except Exception as exc:
+            messagebox.showerror("Log failed", f"{type(exc).__name__}: {exc}")
 
     def open_calibration_dialog(self):
         dialog = tk.Toplevel(self)
