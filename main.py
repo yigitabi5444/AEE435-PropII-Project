@@ -542,8 +542,13 @@ class NiDaqGui(tk.Tk):
             messagebox.showerror("Error", "Start acquisition before logging.")
             return
 
-        self._refresh_latest_readings()
-        if not self._has_valid_sensor_data(self.last_tc_raw) or not self._has_valid_sensor_data(self.last_ai_raw):
+        tc_raw = self._read_latest(self.tc_task, 3)
+        ai_raw = self._read_latest(self.ai_task, 4)
+        if tc_raw is None:
+            tc_raw = self.last_tc_raw
+        if ai_raw is None:
+            ai_raw = self.last_ai_raw
+        if not self._has_valid_sensor_data(tc_raw) or not self._has_valid_sensor_data(ai_raw):
             messagebox.showerror("Error", "No sensor data available yet.")
             return
 
@@ -564,8 +569,8 @@ class NiDaqGui(tk.Tk):
         filename = f"operating_point_{operating_point_name}.txt"
         path = os.path.join(self.script_dir, filename)
 
-        tc0, tc1, tc2 = self.last_tc_raw
-        ai0, ai1, ai2, ai3 = self.last_ai_raw
+        tc0, tc1, tc2 = tc_raw
+        ai0, ai1, ai2, ai3 = ai_raw
         data = [
             ("timestamp", time.strftime("%Y-%m-%d %H:%M:%S")),
             ("operating_point_name", operating_point_name),
