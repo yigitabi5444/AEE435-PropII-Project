@@ -40,6 +40,7 @@ class NiDaqGui(tk.Tk):
         # Readouts
         self.tc_vals = [tk.StringVar(value="—") for _ in range(3)]
         self.ai_vals = [tk.StringVar(value="—") for _ in range(4)]
+        self.exit_velocity = tk.StringVar(value="—")
         self.status = tk.StringVar(value="Disconnected")
 
         self.last_tc_raw = [None] * 3
@@ -120,9 +121,9 @@ class NiDaqGui(tk.Tk):
         tc_box.pack(side="left", fill="both", expand=True, padx=8, pady=8)
 
         temp_labels = (
-            "Compressor Exit Total Temp",
-            "Turbine Inlet Total Temp",
-            "Turbine Exit Total Temp",
+            "Turbine Inlet Total Temp (T04)",
+            "Compressor Exit Total Temp (T03)",
+            "Turbine Exit Total Temp (T05)",
         )
         for i, label in enumerate(temp_labels):
             ttk.Label(tc_box, text=f"{label}:").grid(row=i, column=0, sticky="w", padx=10, pady=10)
@@ -132,14 +133,17 @@ class NiDaqGui(tk.Tk):
         ai_box.pack(side="right", fill="both", expand=True, padx=8, pady=8)
 
         pressure_labels = (
-            "Compressor Exit Total Pressure",
-            "Turbine Inlet Total Pressure",
-            "Turbine Exit Total Pressure",
-            "AI3 (Spare)",
+            "Turbine Exit Total Pressure (P05)",
+            "Turbine Exit Static Pressure (P5)",
+            "Compressor Exit Total Pressure (P03)",
+            "Turbine Inlet Total Pressure (P04)",
         )
         for i, label in enumerate(pressure_labels):
             ttk.Label(ai_box, text=f"{label}:").grid(row=i, column=0, sticky="w", padx=10, pady=10)
             ttk.Label(ai_box, textvariable=self.ai_vals[i], font=("TkDefaultFont", 12, "bold")).grid(row=i, column=1, sticky="w", padx=10, pady=10)
+
+        ttk.Label(ai_box, text="Exit Flow Velocity (m/s):").grid(row=4, column=0, sticky="w", padx=10, pady=10)
+        ttk.Label(ai_box, textvariable=self.exit_velocity, font=("TkDefaultFont", 12, "bold")).grid(row=4, column=1, sticky="w", padx=10, pady=10)
 
         # Close handler
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -286,6 +290,22 @@ class NiDaqGui(tk.Tk):
             return eng1
         return eng1 + (value - raw1) * (eng2 - eng1) / (raw2 - raw1)
 
+    def _compute_exit_velocity(self, p_total, p_static):
+        if p_total is None or p_static is None:
+            return None
+        if isinstance(p_total, float) and math.isnan(p_total):
+            return None
+        if isinstance(p_static, float) and math.isnan(p_static):
+            return None
+        try:
+            dp = p_total - p_static
+        except Exception:
+            return None
+        if dp < 0:
+            return None
+        density = 1.225
+        return math.sqrt(2.0 * dp / density)
+
     def _get_period_ms(self):
         try:
             value = int(self.sample_period_ms.get())
@@ -430,6 +450,7 @@ class NiDaqGui(tk.Tk):
         self.status.set("Disconnected")
         for v in self.tc_vals + self.ai_vals:
             v.set("—")
+        self.exit_velocity.set("—")
 
     def _cleanup_tasks(self):
         for t in (self.tc_task, self.ai_task):
@@ -466,6 +487,8 @@ class NiDaqGui(tk.Tk):
             if any(v is not None for v in self.last_ai_raw):
                 for i in range(4):
                     self.ai_vals[i].set(self._format_value(ai_cal[i], ".4f"))
+                velocity = self._compute_exit_velocity(ai_cal[0], ai_cal[1])
+                self.exit_velocity.set(self._format_value(velocity, ".2f"))
 
         except Exception as e:
             # Stop acquisition but keep connection so user can retry
@@ -550,13 +573,13 @@ class NiDaqGui(tk.Tk):
             ("t02_raw", inlet_temp),
             ("p02_raw", inlet_pressure),
             ("throat_area", throat_area),
-            ("t03_raw", tc0),
-            ("p03_raw", ai0),
-            ("t04_raw", tc1),
-            ("p04_raw", ai1),
+            ("t04_raw", tc0),
+            ("t03_raw", tc1),
             ("t05_raw", tc2),
-            ("p05_raw", ai2),
-            ("ai3_raw", ai3),
+            ("p05_raw", ai0),
+            ("p5_raw", ai1),
+            ("p03_raw", ai2),
+            ("p04_raw", ai3),
         ]
 
         try:
