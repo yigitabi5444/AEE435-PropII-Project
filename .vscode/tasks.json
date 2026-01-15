@@ -38,9 +38,11 @@
       "args": [
         "scripts/generate_sample_data.py",
         "--map-type",
-        "compressor",
+        "both",
         "--num-samples",
         "100",
+        "--output-dir",
+        "outputs",
         "--overwrite"
       ],
       "options": {

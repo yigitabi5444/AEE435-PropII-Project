@@ -54,12 +54,12 @@ def build_sample_figure(
     config = get_map_config(map_type)
     figure = figure_cls(figsize=(8, 3.5))
     axes = figure.subplots(1, 2)
-    extent = [axis0.min(), axis0.max(), axis1.min(), axis1.max()]
+    extent = [axis1.min(), axis1.max(), axis0.min(), axis0.max()]
     axis0_values = np.asarray(axis0)
     axis1_values = np.asarray(axis1)
 
     for channel_index, axis in enumerate(axes):
-        image_data = tensor[channel_index].T
+        image_data = tensor[channel_index]
         image = axis.imshow(
             image_data,
             origin="lower",
@@ -68,20 +68,20 @@ def build_sample_figure(
             cmap="viridis",
         )
         axis.set_title(config.channels[channel_index])
-        axis.set_xlabel(config.axis0_name)
-        axis.set_ylabel(config.axis1_name)
+        axis.set_xlabel(config.axis1_name)
+        axis.set_ylabel(config.axis0_name)
         figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04, label=config.channels[channel_index])
 
         def format_coord(x: float, y: float, channel: int = channel_index) -> str:
-            if x < axis0_values.min() or x > axis0_values.max():
-                return f"{config.axis0_name}={x:.3f}, {config.axis1_name}={y:.3f}"
-            if y < axis1_values.min() or y > axis1_values.max():
-                return f"{config.axis0_name}={x:.3f}, {config.axis1_name}={y:.3f}"
-            x_index = int(np.argmin(np.abs(axis0_values - x)))
-            y_index = int(np.argmin(np.abs(axis1_values - y)))
-            value = tensor[channel, x_index, y_index]
+            if x < axis1_values.min() or x > axis1_values.max():
+                return f"{config.axis1_name}={x:.3f}, {config.axis0_name}={y:.3f}"
+            if y < axis0_values.min() or y > axis0_values.max():
+                return f"{config.axis1_name}={x:.3f}, {config.axis0_name}={y:.3f}"
+            x_index = int(np.argmin(np.abs(axis1_values - x)))
+            y_index = int(np.argmin(np.abs(axis0_values - y)))
+            value = tensor[channel, y_index, x_index]
             return (
-                f"{config.axis0_name}={x:.3f}, {config.axis1_name}={y:.3f}, "
+                f"{config.axis1_name}={x:.3f}, {config.axis0_name}={y:.3f}, "
                 f"{config.channels[channel]}={value:.4f}"
             )
 

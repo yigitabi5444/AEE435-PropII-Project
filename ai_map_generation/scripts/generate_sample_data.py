@@ -158,8 +158,8 @@ def generate_dataset(map_type: str, output_dir: Path, num_samples: int, seed: in
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate synthetic training maps and test point sets.")
-    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "datasets")
-    parser.add_argument("--map-type", choices=["compressor", "turbine", "both"], default="compressor")
+    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "outputs")
+    parser.add_argument("--map-type", choices=["compressor", "turbine", "both"], default="both")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--overwrite", action="store_true")
