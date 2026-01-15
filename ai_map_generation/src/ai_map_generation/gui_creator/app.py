@@ -171,17 +171,17 @@ class CreatorWindow(QtWidgets.QMainWindow):
 
         self.iterations_spin = QtWidgets.QSpinBox()
         self.iterations_spin.setRange(1, 10000)
-        self.iterations_spin.setValue(300)
+        self.iterations_spin.setValue(10000)
 
         self.learning_rate_spin = QtWidgets.QDoubleSpinBox()
         self.learning_rate_spin.setRange(1e-6, 1.0)
         self.learning_rate_spin.setDecimals(6)
-        self.learning_rate_spin.setValue(1e-2)
+        self.learning_rate_spin.setValue(1e-3)
 
         self.lambda_spin = QtWidgets.QDoubleSpinBox()
         self.lambda_spin.setRange(0.0, 10.0)
         self.lambda_spin.setDecimals(6)
-        self.lambda_spin.setValue(1e-3)
+        self.lambda_spin.setValue(1e-4)
 
         self.tolerance_spin = QtWidgets.QDoubleSpinBox()
         self.tolerance_spin.setRange(0.0, 1.0)

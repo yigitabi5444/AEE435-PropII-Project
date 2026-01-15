@@ -166,7 +166,7 @@ class TrainerWindow(QtWidgets.QMainWindow):
 
         self.epochs_spin = QtWidgets.QSpinBox()
         self.epochs_spin.setRange(1, 10000)
-        self.epochs_spin.setValue(200)
+        self.epochs_spin.setValue(1000)
 
         self.batch_spin = QtWidgets.QSpinBox()
         self.batch_spin.setRange(1, 4096)
