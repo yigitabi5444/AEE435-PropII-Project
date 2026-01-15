@@ -8,8 +8,10 @@ from PySide6 import QtCore, QtWidgets
 
 from ..common.config import get_map_config
 from ..common.io_formats import load_points_csv, load_points_json, save_created_map_csv, save_created_map_npz, save_latent_npz
+from ..common.plotting import build_sample_figure
 from ..common.utils import compute_sha256, get_device, seed_everything
 from ..fitting.latent_fit import FitConfig, FitResult, fit_latent
+from ..gui_common.widgets import MapInspectDialog
 from ..training.export import build_model_from_artifact, load_model_artifact
 from .widgets import configure_table
 
@@ -239,14 +241,17 @@ class CreatorWindow(QtWidgets.QMainWindow):
         group = QtWidgets.QGroupBox("Export")
         layout = QtWidgets.QHBoxLayout(group)
         map_button = QtWidgets.QPushButton("Export Map")
+        inspect_button = QtWidgets.QPushButton("Inspect Map")
         latent_button = QtWidgets.QPushButton("Export Latent")
         report_button = QtWidgets.QPushButton("Export Report")
 
         map_button.clicked.connect(self._export_map)
+        inspect_button.clicked.connect(self._inspect_map)
         latent_button.clicked.connect(self._export_latent)
         report_button.clicked.connect(self._export_report)
 
         layout.addWidget(map_button)
+        layout.addWidget(inspect_button)
         layout.addWidget(latent_button)
         layout.addWidget(report_button)
         layout.addStretch()
@@ -446,7 +451,15 @@ class CreatorWindow(QtWidgets.QMainWindow):
     def _cleanup_worker(self) -> None:
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        if self.worker and self.worker.isRunning():
+            self.worker.wait()
         self.worker = None
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        if self.worker and self.worker.isRunning():
+            self.worker.request_stop()
+            self.worker.wait()
+        event.accept()
 
     def _update_residuals_table(self, result: FitResult) -> None:
         config = get_map_config(self.map_type_combo.currentText().lower())
@@ -497,6 +510,18 @@ class CreatorWindow(QtWidgets.QMainWindow):
                 }
             )
         return fit_meta
+
+    def _inspect_map(self) -> None:
+        if not self.fit_result or self.axis0 is None or self.axis1 is None:
+            self._log("Run optimization before inspecting the map.")
+            return
+        try:
+            map_type = self.map_type_combo.currentText().lower()
+            figure = build_sample_figure(self.fit_result.reconstructed, self.axis0, self.axis1, map_type)
+            dialog = MapInspectDialog(figure, self)
+            dialog.exec()
+        except Exception as exc:
+            self._log(f"Inspect error: {exc}")
 
     def _export_map(self) -> None:
         if not self.fit_result or self.axis0 is None or self.axis1 is None:

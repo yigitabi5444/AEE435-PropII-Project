@@ -86,10 +86,6 @@ class TrainWorker(QtCore.QThread):
             )
             save_model_artifact(self.model_path, artifact)
 
-            curve_png = self.model_path.with_name(f"{self.model_path.stem}_loss.png")
-            curve_csv = self.model_path.with_name(f"{self.model_path.stem}_loss.csv")
-            save_loss_curves(losses, curve_png, curve_csv)
-
             self.message.emit("Training completed and model saved.")
             self.finished.emit(losses)
         except Exception as exc:
@@ -104,6 +100,7 @@ class TrainerWindow(QtWidgets.QMainWindow):
 
         self.dataset: MapDataset | None = None
         self.worker: TrainWorker | None = None
+        self.last_model_path: Path | None = None
 
         central = QtWidgets.QWidget()
         main_layout = QtWidgets.QVBoxLayout(central)
@@ -139,6 +136,8 @@ class TrainerWindow(QtWidgets.QMainWindow):
         load_button.clicked.connect(self._load_dataset)
 
         self.sample_count_label = QtWidgets.QLabel("Samples: 0")
+        self.sample_combo = QtWidgets.QComboBox()
+        self.sample_combo.setEnabled(False)
         inspect_button = QtWidgets.QPushButton("Inspect Sample")
         inspect_button.clicked.connect(self._inspect_sample)
 
@@ -147,7 +146,9 @@ class TrainerWindow(QtWidgets.QMainWindow):
         layout.addWidget(browse_button, 0, 2)
         layout.addWidget(load_button, 1, 1)
         layout.addWidget(self.sample_count_label, 1, 0)
-        layout.addWidget(inspect_button, 1, 2)
+        layout.addWidget(QtWidgets.QLabel("Sample"), 2, 0)
+        layout.addWidget(self.sample_combo, 2, 1)
+        layout.addWidget(inspect_button, 2, 2)
         return group
 
     def _build_model_group(self) -> QtWidgets.QGroupBox:
@@ -260,17 +261,26 @@ class TrainerWindow(QtWidgets.QMainWindow):
         try:
             self.dataset = MapDataset(folder, map_type)
             self.sample_count_label.setText(f"Samples: {len(self.dataset)}")
+            self.sample_combo.clear()
+            self.sample_combo.addItems(self.dataset.sample_labels)
+            self.sample_combo.setEnabled(True)
             self._log(f"Loaded dataset ({self.dataset.map_type}) from {folder}.")
         except Exception as exc:
             self._log(f"Dataset error: {exc}")
             self.dataset = None
+            self.sample_combo.clear()
+            self.sample_combo.setEnabled(False)
 
     def _inspect_sample(self) -> None:
         if not self.dataset:
             self._log("Load a dataset before inspecting.")
             return
         try:
-            sample = self.dataset[0].numpy()
+            index = self.sample_combo.currentIndex()
+            if index < 0:
+                self._log("Select a sample to inspect.")
+                return
+            sample = self.dataset[index].numpy()
             figure = build_sample_figure(sample, self.dataset.axis0, self.dataset.axis1, self.dataset.map_type)
             dialog = SampleInspectDialog(figure, self)
             dialog.exec()
@@ -322,12 +332,13 @@ class TrainerWindow(QtWidgets.QMainWindow):
         self.progress_bar.setMaximum(config.epochs)
         self.progress_bar.setValue(0)
 
+        self.last_model_path = Path(model_path)
         self.worker = TrainWorker(
             dataset=self.dataset,
             model=model,
             config=config,
             device=device,
-            model_path=Path(model_path),
+            model_path=self.last_model_path,
             model_arch=model_arch,
             seed=seed,
         )
@@ -355,9 +366,25 @@ class TrainerWindow(QtWidgets.QMainWindow):
 
     def _on_finished(self, losses: list) -> None:
         self._log(f"Training finished. Final loss: {losses[-1]:.6f}")
+        if self.last_model_path:
+            curve_png = self.last_model_path.with_name(f"{self.last_model_path.stem}_loss.png")
+            curve_csv = self.last_model_path.with_name(f"{self.last_model_path.stem}_loss.csv")
+            try:
+                save_loss_curves(losses, curve_png, curve_csv)
+                self._log(f"Saved loss curves to {curve_png}.")
+            except Exception as exc:
+                self._log(f"Loss curve save error: {exc}")
         self._cleanup_worker()
 
     def _cleanup_worker(self) -> None:
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        if self.worker and self.worker.isRunning():
+            self.worker.wait()
         self.worker = None
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        if self.worker and self.worker.isRunning():
+            self.worker.request_stop()
+            self.worker.wait()
+        event.accept()

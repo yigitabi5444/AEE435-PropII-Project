@@ -24,6 +24,8 @@ class MapDataset(Dataset):
         self.axis0 = first_sample.axis0
         self.axis1 = first_sample.axis1
         self.input_shape = first_sample.tensor.shape
+        self.sample_labels: list[str] = []
+        self.sample_labels.append(first_sample.sample_id or self.files[0].name)
 
         for sample_path in self.files[1:]:
             sample = load_map_npz(sample_path, self.map_type)
@@ -34,6 +36,7 @@ class MapDataset(Dataset):
                 )
             if not np.allclose(sample.axis0, self.axis0) or not np.allclose(sample.axis1, self.axis1):
                 raise ValueError(f"Sample {sample_path} grid does not match dataset grid.")
+            self.sample_labels.append(sample.sample_id or sample_path.name)
 
     def __len__(self) -> int:
         return len(self.files)
