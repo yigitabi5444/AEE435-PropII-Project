@@ -84,6 +84,10 @@ class CreatorWindow(QtWidgets.QMainWindow):
         self.map_type: str | None = None
         self.axis0: np.ndarray | None = None
         self.axis1: np.ndarray | None = None
+        self.axis0_raw_min: float | None = None
+        self.axis0_raw_max: float | None = None
+        self.axis1_raw_min: float | None = None
+        self.axis1_raw_max: float | None = None
         self.latent_dim: int | None = None
         self.fit_result: FitResult | None = None
         self.last_fit_config: FitConfig | None = None
@@ -295,13 +299,20 @@ class CreatorWindow(QtWidgets.QMainWindow):
             grid = artifact["grid"]
             self.axis0 = np.asarray(grid["axis0"], dtype=np.float32)
             self.axis1 = np.asarray(grid["axis1"], dtype=np.float32)
+            self.axis0_raw_min = grid.get("axis0_raw_min")
+            self.axis0_raw_max = grid.get("axis0_raw_max")
+            self.axis1_raw_min = grid.get("axis1_raw_min")
+            self.axis1_raw_max = grid.get("axis1_raw_max")
             self.latent_dim = int(artifact["latent_dim"])
 
             map_type_text = (self.map_type or "").capitalize()
             self.map_type_combo.setCurrentText(map_type_text)
+            raw_text = ""
+            if self.axis0_raw_min is not None and self.axis0_raw_max is not None:
+                raw_text = f" | raw axis: [{self.axis0_raw_min:.3f}, {self.axis0_raw_max:.3f}]"
             self.meta_label.setText(
                 f"Map: {self.map_type} | latent_dim: {self.latent_dim} | "
-                f"grid: {self.axis0.size}x{self.axis1.size}"
+                f"grid: {self.axis0.size}x{self.axis1.size}{raw_text}"
             )
             self._log(f"Loaded model from {path_text}.")
         except Exception as exc:
@@ -371,7 +382,22 @@ class CreatorWindow(QtWidgets.QMainWindow):
             values.append(row_values)
 
         data = np.asarray(values, dtype=np.float32)
-        return data[:, :2], data[:, 2:]
+        inputs = data[:, :2]
+        targets = data[:, 2:]
+        if (
+            self.axis0_raw_min is not None
+            and self.axis0_raw_max is not None
+            and self.axis1_raw_min is not None
+            and self.axis1_raw_max is not None
+        ):
+            axis0_span = self.axis0_raw_max - self.axis0_raw_min
+            axis1_span = self.axis1_raw_max - self.axis1_raw_min
+            if axis0_span > 0:
+                inputs[:, 0] = (inputs[:, 0] - self.axis0_raw_min) / axis0_span
+            if axis1_span > 0:
+                scale = float(self.axis1[-1]) if self.axis1 is not None else 1.0
+                inputs[:, 1] = (inputs[:, 1] - self.axis1_raw_min) / axis1_span * scale
+        return inputs, targets
 
     def _start_fit(self) -> None:
         if self.worker:

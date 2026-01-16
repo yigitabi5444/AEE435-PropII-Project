@@ -68,12 +68,23 @@ class TrainWorker(QtCore.QThread):
                 raise RuntimeError("Training produced no losses (was it stopped?).")
 
             final_loss = float(losses[-1])
+            raw_ranges = {
+                key: value
+                for key, value in {
+                    "axis0_raw_min": self.dataset.axis0_raw_min,
+                    "axis0_raw_max": self.dataset.axis0_raw_max,
+                    "axis1_raw_min": self.dataset.axis1_raw_min,
+                    "axis1_raw_max": self.dataset.axis1_raw_max,
+                }.items()
+                if value is not None
+            }
             training_meta = {
                 "epochs": len(losses),
                 "batch_size": self.config.batch_size,
                 "lr": self.config.learning_rate,
                 "final_loss": final_loss,
                 "seed": self.seed,
+                "raw_ranges": raw_ranges,
             }
             artifact = build_model_artifact(
                 model=self.model,

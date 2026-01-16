@@ -20,13 +20,14 @@ def build_model_artifact(
     training_meta: dict,
 ) -> dict:
     timestamp_utc = datetime.now(timezone.utc).isoformat()
+    raw_ranges = training_meta.get("raw_ranges")
     return {
         "format_version": "1.0",
         "map_type": map_type,
         "timestamp_utc": timestamp_utc,
         "framework": "pytorch",
         "latent_dim": int(latent_dim),
-        "grid": axis_metadata(map_type, axis0, axis1),
+        "grid": axis_metadata(map_type, axis0, axis1, raw_ranges=raw_ranges),
         "model_arch": model_arch,
         "state_dict": {
             "encoder": model.encoder.state_dict(),

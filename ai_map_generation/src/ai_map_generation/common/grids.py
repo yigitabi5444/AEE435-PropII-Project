@@ -40,12 +40,20 @@ def validate_grid(axis0: np.ndarray, axis1: np.ndarray) -> None:
     validate_axis(axis1, "axis1")
 
 
-def axis_metadata(map_type: str, axis0: np.ndarray, axis1: np.ndarray) -> dict:
+def axis_metadata(
+    map_type: str,
+    axis0: np.ndarray,
+    axis1: np.ndarray,
+    raw_ranges: dict | None = None,
+) -> dict:
     config = get_map_config(map_type)
-    return {
+    metadata = {
         "axis0_name": config.axis0_name,
         "axis0": axis0.astype(float).tolist(),
         "axis1_name": config.axis1_name,
         "axis1": axis1.astype(float).tolist(),
         "channels": list(config.channels),
     }
+    if raw_ranges:
+        metadata.update(raw_ranges)
+    return metadata

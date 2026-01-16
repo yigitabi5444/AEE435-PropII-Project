@@ -26,6 +26,11 @@ class MapDataset(Dataset):
         self.input_shape = first_sample.tensor.shape
         self.sample_labels: list[str] = []
         self.sample_labels.append(first_sample.sample_id or self.files[0].name)
+        self.axis0_raw_min = first_sample.axis0_raw_min
+        self.axis0_raw_max = first_sample.axis0_raw_max
+        self.axis1_raw_min = first_sample.axis1_raw_min
+        self.axis1_raw_max = first_sample.axis1_raw_max
+        self._raw_ranges_consistent = True
 
         for sample_path in self.files[1:]:
             sample = load_map_npz(sample_path, self.map_type)
@@ -36,6 +41,30 @@ class MapDataset(Dataset):
                 )
             if not np.allclose(sample.axis0, self.axis0) or not np.allclose(sample.axis1, self.axis1):
                 raise ValueError(f"Sample {sample_path} grid does not match dataset grid.")
+            if self._raw_ranges_consistent:
+                if sample.axis0_raw_min is None or self.axis0_raw_min is None:
+                    self._raw_ranges_consistent = False
+                elif not np.isclose(sample.axis0_raw_min, self.axis0_raw_min):
+                    self._raw_ranges_consistent = False
+                if sample.axis0_raw_max is None or self.axis0_raw_max is None:
+                    self._raw_ranges_consistent = False
+                elif not np.isclose(sample.axis0_raw_max, self.axis0_raw_max):
+                    self._raw_ranges_consistent = False
+                if sample.axis1_raw_min is None or self.axis1_raw_min is None:
+                    self._raw_ranges_consistent = False
+                elif not np.isclose(sample.axis1_raw_min, self.axis1_raw_min):
+                    self._raw_ranges_consistent = False
+                if sample.axis1_raw_max is None or self.axis1_raw_max is None:
+                    self._raw_ranges_consistent = False
+                elif not np.isclose(sample.axis1_raw_max, self.axis1_raw_max):
+                    self._raw_ranges_consistent = False
+
+            if not self._raw_ranges_consistent:
+                self.axis0_raw_min = None
+                self.axis0_raw_max = None
+                self.axis1_raw_min = None
+                self.axis1_raw_max = None
+
             self.sample_labels.append(sample.sample_id or sample_path.name)
 
     def __len__(self) -> int:

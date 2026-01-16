@@ -19,6 +19,10 @@ class MapSample:
     axis0: np.ndarray
     axis1: np.ndarray
     sample_id: str | None
+    axis0_raw_min: float | None = None
+    axis0_raw_max: float | None = None
+    axis1_raw_min: float | None = None
+    axis1_raw_max: float | None = None
 
 
 @dataclass
@@ -61,7 +65,21 @@ def load_map_npz(path: str | Path, expected_map_type: str | None = None) -> MapS
         )
 
     sample_id = str(data["id"]) if "id" in data else None
-    return MapSample(tensor=tensor, map_type=map_type, axis0=axis0, axis1=axis1, sample_id=sample_id)
+    axis0_raw_min = data["axis0_raw_min"].item() if "axis0_raw_min" in data else None
+    axis0_raw_max = data["axis0_raw_max"].item() if "axis0_raw_max" in data else None
+    axis1_raw_min = data["axis1_raw_min"].item() if "axis1_raw_min" in data else None
+    axis1_raw_max = data["axis1_raw_max"].item() if "axis1_raw_max" in data else None
+    return MapSample(
+        tensor=tensor,
+        map_type=map_type,
+        axis0=axis0,
+        axis1=axis1,
+        sample_id=sample_id,
+        axis0_raw_min=axis0_raw_min,
+        axis0_raw_max=axis0_raw_max,
+        axis1_raw_min=axis1_raw_min,
+        axis1_raw_max=axis1_raw_max,
+    )
 
 
 def load_points_csv(path: str | Path, map_type: str) -> OperatingPoints:
