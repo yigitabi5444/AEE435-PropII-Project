@@ -1,0 +1,13 @@
+timestamp: 2026-01-16 16:32:55
+operating_point_name: T6_P102.1_RPM36000
+shaft_speed_rpm: 36000.0
+t02_raw: 6.0
+p02_raw: 102.1
+throat_area: 0.005
+t04_raw: 593.6187133502185
+t03_raw: 76.41220377759085
+t05_raw: 391.0
+p05_raw: 0.754448282
+p5_raw: 0.7646092670000001
+p03_raw: 0.774959531
+p04_raw: 0.841735703

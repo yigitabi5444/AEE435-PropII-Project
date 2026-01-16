@@ -49,6 +49,25 @@
         "cwd": "${workspaceFolder}/ai_map_generation"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Convert bench data",
+      "type": "shell",
+      "command": "python3",
+      "windows": {
+        "command": "python"
+      },
+      "args": [
+        "scripts/convert_bench_data.py",
+        "--input-dir",
+        "bench_data/raw",
+        "--output-dir",
+        "bench_data/processed"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/ai_map_generation"
+      },
+      "problemMatcher": []
     }
   ]
 }

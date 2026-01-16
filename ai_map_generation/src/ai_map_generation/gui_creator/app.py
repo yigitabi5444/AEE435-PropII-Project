@@ -98,6 +98,7 @@ class CreatorWindow(QtWidgets.QMainWindow):
         main_layout.addWidget(self._build_map_toggle())
         main_layout.addWidget(self._build_model_group())
         main_layout.addWidget(self._build_points_group())
+        main_layout.addWidget(self._build_normalization_group())
         main_layout.addWidget(self._build_optimizer_group())
         main_layout.addWidget(self._build_run_group())
         main_layout.addWidget(self._build_residuals_group())
@@ -161,6 +162,30 @@ class CreatorWindow(QtWidgets.QMainWindow):
 
         layout.addLayout(button_layout)
         layout.addWidget(self.points_table)
+        return group
+
+    def _build_normalization_group(self) -> QtWidgets.QGroupBox:
+        group = QtWidgets.QGroupBox("Normalization")
+        layout = QtWidgets.QGridLayout(group)
+
+        self.axis0_max_spin = QtWidgets.QDoubleSpinBox()
+        self.axis0_max_spin.setRange(0.0, 1e9)
+        self.axis0_max_spin.setDecimals(6)
+        self.axis0_max_spin.setValue(0.0)
+
+        self.axis1_max_spin = QtWidgets.QDoubleSpinBox()
+        self.axis1_max_spin.setRange(0.0, 1e9)
+        self.axis1_max_spin.setDecimals(6)
+        self.axis1_max_spin.setValue(0.0)
+
+        self.axis0_max_spin.setSpecialValueText("Auto")
+        self.axis1_max_spin.setSpecialValueText("Auto")
+
+        layout.addWidget(QtWidgets.QLabel("Nc max"), 0, 0)
+        layout.addWidget(self.axis0_max_spin, 0, 1)
+        layout.addWidget(QtWidgets.QLabel("Axis1 max"), 0, 2)
+        layout.addWidget(self.axis1_max_spin, 0, 3)
+        layout.addWidget(QtWidgets.QLabel("Leave blank/0 for auto (1.2x max input)."), 1, 0, 1, 4)
         return group
 
     def _build_optimizer_group(self) -> QtWidgets.QGroupBox:
@@ -280,6 +305,10 @@ class CreatorWindow(QtWidgets.QMainWindow):
 
     def _update_point_headers(self) -> None:
         configure_table(self.points_table, self._current_point_headers())
+        if self.map_type_combo.currentText().lower() == "compressor":
+            self.axis1_max_spin.setSuffix(" mdotc")
+        else:
+            self.axis1_max_spin.setSuffix(" pi_t")
 
     def _browse_model(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open Model", filter="PyTorch Model (*.pt)")
@@ -308,12 +337,21 @@ class CreatorWindow(QtWidgets.QMainWindow):
             map_type_text = (self.map_type or "").capitalize()
             self.map_type_combo.setCurrentText(map_type_text)
             raw_text = ""
-            if self.axis0_raw_min is not None and self.axis0_raw_max is not None:
-                raw_text = f" | raw axis: [{self.axis0_raw_min:.3f}, {self.axis0_raw_max:.3f}]"
+            if self.axis0_raw_max is not None:
+                raw_text = (
+                    f" | raw max: Nc={self.axis0_raw_max:.3f}, "
+                    f"axis1={self.axis1_raw_max:.3f}" if self.axis1_raw_max is not None else ""
+                )
             self.meta_label.setText(
                 f"Map: {self.map_type} | latent_dim: {self.latent_dim} | "
                 f"grid: {self.axis0.size}x{self.axis1.size}{raw_text}"
             )
+
+            if self.axis0_raw_max is not None:
+                self.axis0_max_spin.setValue(float(self.axis0_raw_max))
+            if self.axis1_raw_max is not None:
+                self.axis1_max_spin.setValue(float(self.axis1_raw_max))
+
             self._log(f"Loaded model from {path_text}.")
         except Exception as exc:
             self._log(f"Model load error: {exc}")
@@ -384,19 +422,31 @@ class CreatorWindow(QtWidgets.QMainWindow):
         data = np.asarray(values, dtype=np.float32)
         inputs = data[:, :2]
         targets = data[:, 2:]
-        if (
-            self.axis0_raw_min is not None
-            and self.axis0_raw_max is not None
-            and self.axis1_raw_min is not None
-            and self.axis1_raw_max is not None
-        ):
-            axis0_span = self.axis0_raw_max - self.axis0_raw_min
-            axis1_span = self.axis1_raw_max - self.axis1_raw_min
-            if axis0_span > 0:
-                inputs[:, 0] = (inputs[:, 0] - self.axis0_raw_min) / axis0_span
-            if axis1_span > 0:
-                scale = float(self.axis1[-1]) if self.axis1 is not None else 1.0
-                inputs[:, 1] = (inputs[:, 1] - self.axis1_raw_min) / axis1_span * scale
+
+        axis0_max = float(self.axis0_max_spin.value())
+        axis1_max = float(self.axis1_max_spin.value())
+
+        if axis0_max <= 0.0:
+            axis0_max = float(np.max(inputs[:, 0]) * 1.2)
+        if axis1_max <= 0.0:
+            axis1_max = float(np.max(inputs[:, 1]) * 1.2)
+
+        if axis0_max <= 0.0 or axis1_max <= 0.0:
+            self._log("Normalization max values must be positive.")
+            return None
+
+        inputs[:, 0] = inputs[:, 0] / axis0_max
+
+        if self.map_type_combo.currentText().lower() == "compressor":
+            inputs[:, 1] = inputs[:, 1] / axis1_max
+        else:
+            if axis1_max <= 1.0:
+                self._log("Turbine axis1 max must be greater than 1.0.")
+                return None
+            inputs[:, 1] = (inputs[:, 1] - 1.0) / (axis1_max - 1.0) * 5.0
+
+        self._log(f"Normalization: Nc_max={axis0_max:.3f}, axis1_max={axis1_max:.3f}")
+
         return inputs, targets
 
     def _start_fit(self) -> None:

@@ -1,0 +1,13 @@
+timestamp: 2026-01-15 13:34:16
+operating_point_name: T3_P1.025_RPM37000
+shaft_speed_rpm: 37000.0
+t02_raw: 3.0
+p02_raw: 1.025
+throat_area: 0.005
+t04_raw: 568.778633239997
+t03_raw: 51.49985800505486
+t05_raw: 405
+p05_raw: 0.759585837
+p5_raw: 0.774885613
+p03_raw: 0.795511199
+p04_raw: 0.857148794
